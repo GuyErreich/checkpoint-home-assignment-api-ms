@@ -6,6 +6,11 @@ from api import app as flask_app
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Any:
+    # Patch AWS environment variables
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "test")
+    
     # Patch the environment variable value in the app module
     monkeypatch.setattr("api.app.SQS_QUEUE_URL", "https://dummy-url")
     
