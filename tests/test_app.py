@@ -1,27 +1,30 @@
 import json
 from typing import Any
 import pytest
-from api import app as flask_app
+from unittest.mock import Mock, patch
+import os
+
+# Mock AWS before importing the app
+with patch.dict(os.environ, {
+    'AWS_DEFAULT_REGION': 'us-east-1',
+    'AWS_ACCESS_KEY_ID': 'test',
+    'AWS_SECRET_ACCESS_KEY': 'test'
+}):
+    with patch('boto3.client') as mock_boto3:
+        mock_sqs = Mock()
+        mock_sqs.send_message.return_value = {"MessageId": "123"}
+        mock_boto3.return_value = mock_sqs
+        
+        from api import app as flask_app
 
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Any:
-    # Patch AWS environment variables
-    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "test")
-    
     # Patch the environment variable value in the app module
     monkeypatch.setattr("api.app.SQS_QUEUE_URL", "https://dummy-url")
     
-    # Patch SSM and SQS clients
+    # Patch SSM client
     monkeypatch.setattr("api.app.get_token_from_ssm", lambda name: "correct-token")
-
-    class DummySQS:
-        def send_message(self, QueueUrl: str, MessageBody: str) -> dict[str, str]:
-            return {"MessageId": "123"}
-
-    monkeypatch.setattr("api.app.sqs", DummySQS())
 
     flask_app.app.config["TESTING"] = True
     with flask_app.app.test_client() as client:
