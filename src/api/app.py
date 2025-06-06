@@ -1,11 +1,13 @@
-import os
 import json
-from typing import Any
-from flask import Flask, request
+import os
 from datetime import datetime
-from .deps import get_token_from_ssm
+from typing import Any
+
 import boto3
+from flask import Flask, request
 from mypy_boto3_sqs import SQSClient
+
+from .deps import get_token_from_ssm
 
 app: Flask = Flask(__name__)
 

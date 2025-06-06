@@ -1,6 +1,7 @@
 import boto3
 from mypy_boto3_ssm import SSMClient
 
+
 def get_token_from_ssm(param_name: str) -> str:
     ssm: SSMClient = boto3.client("ssm")
     response = ssm.get_parameter(Name=param_name, WithDecryption=True)
