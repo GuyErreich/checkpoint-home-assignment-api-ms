@@ -2,6 +2,7 @@ name: CI
 
 on:
   workflow_dispatch:
+    
   push:
     branches: [ master ]
   pull_request:
@@ -56,6 +57,35 @@ jobs:
       run: |
         coverage-badge -f -o coverage-badge.svg
 
+    - name: Create Test Summary
+      if: always()
+      run: |
+        echo "## 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        
+        # Extract test count from pytest results
+        if [ -f pytest-results.xml ]; then
+          TESTS=$(grep -o 'tests="[0-9]*"' pytest-results.xml | grep -o '[0-9]*' || echo "N/A")
+          FAILURES=$(grep -o 'failures="[0-9]*"' pytest-results.xml | grep -o '[0-9]*' || echo "0")
+          ERRORS=$(grep -o 'errors="[0-9]*"' pytest-results.xml | grep -o '[0-9]*' || echo "0")
+          echo "| 🧪 Total Tests | $TESTS |" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Passed | $((TESTS - FAILURES - ERRORS)) |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ Failed | $FAILURES |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚠️ Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Extract coverage from coverage.xml
+        if [ -f coverage.xml ]; then
+          COVERAGE=$(grep -o 'line-rate="[0-9.]*"' coverage.xml | head -1 | grep -o '[0-9.]*' | awk '{printf "%.1f%%", $1*100}' || echo "N/A")
+          echo "| 📊 Coverage | $COVERAGE |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📝 **Manual Report**: Test results and coverage data generated locally" >> $GITHUB_STEP_SUMMARY
+        echo "📋 **JUnit XML**: Available in pytest-results.xml for manual analysis" >> $GITHUB_STEP_SUMMARY
+
     - name: Archive test results and coverage
       uses: actions/upload-artifact@v4
       if: always()
@@ -65,14 +95,7 @@ jobs:
           htmlcov/
           coverage.xml
           coverage-badge.svg
-        retention-days: 30
-
-    - name: Archive coverage HTML report
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: coverage-html-report
-        path: htmlcov/
+          pytest-results.xml
         retention-days: 30
 
     - name: Test Docker build
