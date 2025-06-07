@@ -5,6 +5,6 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/api/ ./
+COPY src/ ./
 
-CMD ["python", "app.py"]
+CMD ["python", "-m", "api.app"]
