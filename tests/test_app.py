@@ -1,6 +1,7 @@
 import json
 import os
 from collections.abc import Generator
+from unittest.mock import patch
 
 import pytest
 from flask.testing import FlaskClient
@@ -36,36 +37,20 @@ def client(mocker: MockerFixture) -> Generator[FlaskClient, None, None]:
         yield client
 
 
-@pytest.fixture
-def client_no_queue_url(mocker: MockerFixture) -> Generator[FlaskClient, None, None]:
-    # Set up environment variables without SQS_QUEUE_URL
-    env_vars = {
-        "AWS_DEFAULT_REGION": "us-east-1",
-        "AWS_ACCESS_KEY_ID": "test",
-        "AWS_SECRET_ACCESS_KEY": "test",
-    }
-    # Clear SQS_QUEUE_URL if it exists
-    if "SQS_QUEUE_URL" in os.environ:
-        env_vars["SQS_QUEUE_URL"] = ""
+def test_missing_environment_variable() -> None:
+    """Test that the app fails fast when required environment variables are missing."""
+    # Test missing AWS_DEFAULT_REGION
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(SystemExit):
+        # This import should trigger SystemExit due to missing AWS_DEFAULT_REGION
+        import api.app  # noqa: F401
 
-    mocker.patch.dict(os.environ, env_vars, clear=True)
-
-    # Mock boto3 client
-    mock_sqs = mocker.MagicMock()
-    mocker.patch("boto3.client", return_value=mock_sqs)
-
-    # Mock SSM function
-    mocker.patch("api.deps.get_token_from_ssm", return_value="correct-token")
-
-    # Patch SQS_QUEUE_URL to be None in the app module
-    mocker.patch("api.app.SQS_QUEUE_URL", None)
-
-    # Import after mocking
-    from api import app as flask_app
-
-    flask_app.app.config["TESTING"] = True
-    with flask_app.app.test_client() as client:
-        yield client
+    # Test missing SQS_QUEUE_URL
+    with (
+        patch.dict(os.environ, {"AWS_DEFAULT_REGION": "us-east-1"}, clear=True),
+        pytest.raises(SystemExit),
+    ):
+        # This import should trigger SystemExit due to missing SQS_QUEUE_URL
+        import api.app  # noqa: F401
 
 
 def test_submit_success(client: FlaskClient) -> None:
@@ -112,7 +97,7 @@ def test_submit_missing_timestream(client: FlaskClient) -> None:
 
 
 def test_submit_missing_both_fields(client: FlaskClient) -> None:
-    payload = {}
+    payload: dict[str, str] = {}
     response = client.post(
         "/submit", data=json.dumps(payload), content_type="application/json"
     )
@@ -120,17 +105,8 @@ def test_submit_missing_both_fields(client: FlaskClient) -> None:
     assert response.get_json()["error"] == "Missing token or email_timestream"
 
 
-def test_submit_no_queue_url_configured(client_no_queue_url: FlaskClient) -> None:
-    payload = {"token": "correct-token", "email_timestream": "2024-06-01T12:00:00"}
-    response = client_no_queue_url.post(
-        "/submit", data=json.dumps(payload), content_type="application/json"
-    )
-    assert response.status_code == 500
-    assert response.get_json()["error"] == "SQS_QUEUE_URL not configured"
-
-
 def test_submit_sqs_exception(client: FlaskClient, mocker: MockerFixture) -> None:
-    # Mock SQS to raise an exception - need to patch the already imported sqs instance
+    # Mock SQS to raise an exception - need to patch the sqs variable directly
     mock_sqs = mocker.MagicMock()
     mock_sqs.send_message.side_effect = Exception("SQS error")
     mocker.patch("api.app.sqs", mock_sqs)
@@ -140,7 +116,7 @@ def test_submit_sqs_exception(client: FlaskClient, mocker: MockerFixture) -> Non
         "/submit", data=json.dumps(payload), content_type="application/json"
     )
     assert response.status_code == 500
-    assert "SQS error" in response.get_json()["error"]
+    assert "Failed to queue message" in response.get_json()["error"]
 
 
 def test_get_token_from_ssm(mocker: MockerFixture) -> None:
