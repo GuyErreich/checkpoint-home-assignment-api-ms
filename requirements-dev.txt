@@ -3,4 +3,6 @@ mypy
 pytest
 pytest-cov
 pytest-mock
+requests
+types-requests
 ruff

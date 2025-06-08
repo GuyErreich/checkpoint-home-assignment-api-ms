@@ -18,6 +18,7 @@ def client(mocker: MockerFixture) -> Generator[FlaskClient, None, None]:
             "AWS_ACCESS_KEY_ID": "test",
             "AWS_SECRET_ACCESS_KEY": "test",
             "SQS_QUEUE_URL": "https://dummy-url",
+            "TOKEN_SSM_PARAM": "/api/token",
         },
     )
 
@@ -51,6 +52,16 @@ def test_missing_environment_variable() -> None:
     ):
         # This import should trigger SystemExit due to missing SQS_QUEUE_URL
         import api.app  # noqa: F401
+
+
+def test_health_check(client: FlaskClient) -> None:
+    """Test the health check endpoint."""
+    response = client.get("/")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "healthy"
+    assert data["service"] == "checkpoint-home-assignment-api-ms"
+    assert "/submit" in data["endpoints"]
 
 
 def test_submit_success(client: FlaskClient) -> None:
@@ -120,6 +131,16 @@ def test_submit_sqs_exception(client: FlaskClient, mocker: MockerFixture) -> Non
 
 
 def test_get_token_from_ssm(mocker: MockerFixture) -> None:
+    # Set up environment variables first
+    mocker.patch.dict(
+        os.environ,
+        {
+            "AWS_DEFAULT_REGION": "us-east-1",
+            "SQS_QUEUE_URL": "https://dummy-url",
+            "TOKEN_SSM_PARAM": "/api/token",
+        },
+    )
+
     # Mock SSM client
     mock_ssm = mocker.MagicMock()
     mock_ssm.get_parameter.return_value = {"Parameter": {"Value": "test-token"}}
@@ -135,6 +156,16 @@ def test_get_token_from_ssm(mocker: MockerFixture) -> None:
 
 
 def test_get_token_from_ssm_invalid_type(mocker: MockerFixture) -> None:
+    # Set up environment variables first
+    mocker.patch.dict(
+        os.environ,
+        {
+            "AWS_DEFAULT_REGION": "us-east-1",
+            "SQS_QUEUE_URL": "https://dummy-url",
+            "TOKEN_SSM_PARAM": "/api/token",
+        },
+    )
+
     # Mock SSM client to return non-string value
     mock_ssm = mocker.MagicMock()
     mock_ssm.get_parameter.return_value = {

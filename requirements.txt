@@ -2,3 +2,4 @@ flask
 boto3
 boto3-stubs[sqs,ssm]
 python-dotenv
+gunicorn
